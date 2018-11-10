@@ -1,0 +1,23 @@
+#######################################
+# Syntax Coloring Map
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+SwitchRelay	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+set			KEYWORD2
+getStatus 		KEYWORD2
+getName  		KEYWORD2
+getVarArrayID			KEYWORD2
+getModus		KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
