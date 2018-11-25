@@ -62,26 +62,33 @@ int Tasterstatus()
 //
 //##############################################
 #include <OneWire.h>
-#include <DallasTemperature.h>
+//#include <DallasTemperature.h>
 
 // Data wire is plugged into port 2 on the Arduino
-#define ONE_WIRE_BUS_1 22
-#define ONE_WIRE_BUS_2 23
-#define TEMPERATURE_PRECISION 12
+#define OFEN_PIN 22
+#define SPEICHER_PIN 23
+//#define TEMPERATURE_PRECISION 12
 
 // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
-OneWire oneWireBus1(ONE_WIRE_BUS_1);
-OneWire oneWireBus2(ONE_WIRE_BUS_2);
+//OneWire oneWireBus1(ONE_WIRE_BUS_1);
+//OneWire oneWireBus2(ONE_WIRE_BUS_2);
 
 
 // Pass our oneWire reference to Dallas Temperature.
-DallasTemperature tempSensors1(&oneWireBus1);
-DallasTemperature tempSensors2(&oneWireBus2);
+//DallasTemperature tempSensors1(&oneWireBus1);
+//DallasTemperature tempSensors2(&oneWireBus2);
+
+#include <DS1820_Simple.h> 
+DS1820_Simple * ofenSensor; //OneWire BUS 1
+DS1820_Simple * speicherSensor; //OneWire BUS 1
+
 
 //28 0E 92 92 04 00 00 41
-DeviceAddress ofenSensorAdresse = { 0x28, 0x0E, 0x02, 0xCD, 0x03, 0x00, 0x00, 0xCE };
+//DeviceAddress ofenSensorAdresse = { 0x28, 0x0E, 0x02, 0xCD, 0x03, 0x00, 0x00, 0xCE };
+byte ofenSensorAdresse[8] = { 0x28, 0x0E, 0x02, 0xCD, 0x03, 0x00, 0x00, 0xCE };
 //28 BD CB 92 04 00 00 79
-DeviceAddress speicherSensorAdresse  = { 0x10, 0x9D, 0xDA, 0xDA, 0x00, 0x08, 0x00, 0x8F };
+//DeviceAddress speicherSensorAdresse  = { 0x10, 0x9D, 0xDA, 0xDA, 0x00, 0x08, 0x00, 0x8F };
+byte speicherSensorAdresse[8] = { 0x10, 0x9D, 0xDA, 0xDA, 0x00, 0x08, 0x00, 0x8F };
 
 
 
@@ -103,13 +110,28 @@ SwitchRelay * PumpeRelay;
 
 void setup()
 {
+  Serial.begin(9600);
+  
   lcd.begin(16, 2); // Starten der LCD Programmbibliothek.
   lcd.clear(); // Clear und Position auf 0,0
   lcd.print(">Init Temp. Sens.");
   delay(1000);
 
-  tempSensors1.begin(); // Starten der Temperatur Sensoren
-  tempSensors2.begin(); // Starten der Temperatur Sensoren
+
+  ofenSensor = new DS1820_Simple;
+  speicherSensor = new DS1820_Simple;
+  
+  ofenSensor->init(OFEN_PIN);
+  speicherSensor->init(SPEICHER_PIN);
+
+  ofenSensor->addSensor("Ofen",0,ofenSensorAdresse);
+  speicherSensor->addSensor("Speicher",0,speicherSensorAdresse);
+
+  ofenSensor->updateTemp();
+  speicherSensor->updateTemp();
+
+  //tempSensors1.begin(); // Starten der Temperatur Sensoren
+  //tempSensors2.begin(); // Starten der Temperatur Sensoren
 
   /*
     lcd.clear();
@@ -132,15 +154,15 @@ void setup()
   lcd.setCursor(0, 1);
   lcd.print(tempSensors1.getDS18Count());
 */
-  tempSensors1.setWaitForConversion(false);
-  tempSensors1.setResolution(ofenSensorAdresse, TEMPERATURE_PRECISION);
+  //tempSensors1.setWaitForConversion(false);
+  //tempSensors1.setResolution(ofenSensorAdresse, TEMPERATURE_PRECISION);
   //tempSensors1.setResolution(speicherSensorAdresse, TEMPERATURE_PRECISION);
-  tempSensors1.requestTemperatures();
+  //tempSensors1.requestTemperatures();
 
-  tempSensors2.setWaitForConversion(false);
+  //tempSensors2.setWaitForConversion(false);
   //tempSensors2.setResolution(ofenSensorAdresse, TEMPERATURE_PRECISION);
-  tempSensors2.setResolution(speicherSensorAdresse, TEMPERATURE_PRECISION);
-  tempSensors2.requestTemperatures();
+  //tempSensors2.setResolution(speicherSensorAdresse, TEMPERATURE_PRECISION);
+  //tempSensors2.requestTemperatures();
 
   delay(5000);
 
@@ -167,11 +189,11 @@ void setup()
   lcd.print("EEPROM OK :)");
   delay(2000);
 
-  //printEinDifferenz();
-  //delay(5000);
+  printEinDifferenz();
+  delay(5000);
 
-  //printHysterese();
-  //delay(5000);
+  printHysterese();
+  delay(5000);
 
   PumpeRelay = new SwitchRelay("Pumpe", 52, LOW, 0);
 
@@ -209,8 +231,12 @@ void loop()
 {
   h->blink();
 
+  ofenSensor->updateTemp();
+  speicherSensor->updateTemp();
+
   currentMillis = millis(); // aktuelle Zeit speichern
 
+/*
   if (currentMillis - previousMillisTempRequest > waitForConversion) { //prüfen ob Interval erreicht
     previousMillisTempRequest = currentMillis; // Zeitstempel speichern
 
@@ -221,9 +247,12 @@ void loop()
     tempSensors1.requestTemperatures();
     tempSensors2.requestTemperatures();
   }
+  */
+  speicherTemp = speicherSensor->getTempByAddress(speicherSensorAdresse);
+  ofenTemp = ofenSensor->getTempByAddress(ofenSensorAdresse);
 
   if (ofenTemp != -127 && speicherTemp != -127) { // prüfen ob Sensor als disc. markiert ist.
-    if  (ofenTemp > (speicherTemp + ep.hysterese) )
+    if  (ofenTemp > (speicherTemp + ep.einschaltDifferenz) )
     {
       pumpeAn = true;
       PumpeRelay->set(1);
@@ -250,7 +279,7 @@ void loop()
     
     case Tasterrechts: // Wenn die rechte Taste gedrückt wurde...
       {
-        /*
+        
         if (ep.einschaltDifferenz > 100) {
           delay(1000);
           break;
@@ -264,12 +293,12 @@ void loop()
 
         delay(250);
         previousMillisDisplay = currentMillis; // Zeitstempel speichern
-        */
+       
         break;
       }
     case Tasterlinks:  // Wenn die linke Taste gedrückt wurde...
       {
-        /*
+        
         if (ep.einschaltDifferenz <= 1) {
           delay(1000);
           break;
@@ -283,7 +312,7 @@ void loop()
 
         delay(250);
         previousMillisDisplay = currentMillis; // Zeitstempel speichern
-        */
+       
         break;
       }
       
